@@ -57,6 +57,46 @@ Not answered by any of these: whether a test tenant or a proof of concept is tre
 
 Kept from the POC in every option: business-level tools instead of raw APIs, human approval before every write, read-back after the change, audit trail. SAP's documents do not require human approval; it is our addition.
 
+## Authentication design (option C, not tested)
+
+SAP's Architecture Center page requires authentication on **both** connections: every request into the MCP server and every call from it to an SAP API. It also asks for a token exchange (RFC 8693) that keeps the user and the agent identity, no long-lived credentials in the MCP server, and secrets in a secrets store (e.g. SAP Credential Store). It names SAP Cloud Identity Services but no specific flow, and says nothing about XSUAA, BTP destinations, the Cloud Connector, or Public vs Private Edition.
+
+```
+AI client ──(1)──> MCP server on BTP CF ──(2)──> S/4HANA
+          IAS sign-in                      real user, not a technical user
+```
+
+**Connection 1: AI client → MCP server**
+- SAP Cloud Identity Services (IAS) issues the token; the MCP server validates it on every request.
+- The agent needs its own registered identity in IAS, not only the user.
+- XSUAA on top of IAS probably works too, but SAP's page names only Cloud Identity Services.
+- The AI client must support OAuth sign-in to a remote MCP server (Claude's remote connectors do; check per client).
+
+**Connection 2: MCP server → S/4HANA** (our suggestion; SAP's page names no method)
+
+| Customer system | Principal propagation |
+|---|---|
+| Public Cloud | BTP destination of type OAuth2SAMLBearerAssertion: the destination service turns the signed-in user into a short-lived SAP token. No Cloud Connector needed |
+| Private Cloud / on-premise | Destination with principal propagation through the Cloud Connector (short-lived X.509 certificate per user). Existing Cloud Connector experience carries over |
+
+Business benefit: SAP checks the **real user's own authorisations**, so the agent can never do more than the person at the keyboard.
+
+| SAP condition | IAS only | IAS + principal propagation |
+|---|---|---|
+| Every call into the MCP server authenticated | Yes | Yes |
+| No long-lived credentials in the MCP server | No (password stays) | Yes (held by the destination service) |
+| Real user carried to SAP, token not passed through | No | Yes in substance |
+| Agent identity in IAS | To add | To add |
+| Permissions per tool | Scopes checked in the MCP server | Scopes + the user's SAP roles |
+| Every tool call logged, rate limits | To build | To build |
+
+To verify:
+- whether a SAML-bearer destination counts as the RFC 8693 token exchange SAP asks for (the page says Cloud Identity Services supports principal propagation flows serving as the exchange, and to check availability in the tenant);
+- whether SAP_COM_0053, 0108 and 0057 accept OAuth 2.0 inbound with SAML bearer for business users (Communication Arrangements app);
+- that the endorsement question stays open even with all of the above: confirm with SAP.
+
+Possible spike: one read tool on BTP CF, IAS sign-in, calling S/4 through a SAML-bearer destination.
+
 ## What to say to a customer
 
 > Hosting on BTP doesn't make a custom AI agent compliant; SAP's FAQ is explicit about that. AI access to SAP has to go through an endorsed route, mainly the MCP Gateway in Integration Suite. A custom MCP server can follow SAP's "Third-Party MCP Access" reference architecture, but we would confirm that design with SAP before production. Business-level tools, human approval, verify after write and audit stay the same whichever route is chosen.
