@@ -37,10 +37,23 @@ function baseline(tag, current, reset = false) {
   return b;
 }
 
+// Before / after pictures of one document: "before" = the newest picture taken before the agent's first
+// approved change to it, "after" = the newest picture taken after its last change. No change yet: "now".
+const fileTime = (f) => { const m = f.match(/(\d{4})(\d{2})(\d{2})T(\d{2})(\d{2})(\d{2})\.png$/); return m ? Date.parse(`${m[1]}-${m[2]}-${m[3]}T${m[4]}:${m[5]}:${m[6]}Z`) : 0; };
+function beforeAfter(files = [], changes = [], kind) {
+  if (!files.length) return [];
+  if (!changes.length) return [{ file: files[0], kind, when: "now" }];
+  const times = changes.map((e) => Date.parse(e.time));
+  const before = files.find((f) => fileTime(f) < Math.min(...times));
+  const after = files.find((f) => fileTime(f) > Math.max(...times));
+  return [before && { file: before, kind, when: "before" }, after && { file: after, kind, when: "after" }].filter(Boolean);
+}
+
 async function state(tag) {
   const list = await items(tag);
   const base = list.length ? baseline(tag, list) : { items: {} };
   const audit = (await readAudit({ limit: 200 })).entries || [];
+  const done = audit.filter((e) => String(e.status).startsWith("done"));
   const proofs = listProofs();
   const jobs = Object.fromEntries(proofJobs);
   return {
@@ -55,8 +68,8 @@ async function state(tag) {
           time: e.time, action: e.action, status: e.status, by: e.approval?.answeredBy || null, document: e.materialDocument || e.supplierInvoice || null, comment: e.approval?.comment || null,
         })),
         proofs: [
-          ...(proofs[`PO-${x.purchaseOrder}`] || []).slice(0, 3).map((f) => ({ file: f, kind: "PO status" })),
-          ...invoiceIds.flatMap((i) => (proofs[`INV-${i}`] || []).slice(0, 2).map((f) => ({ file: f, kind: `Invoice ${i}` }))),
+          ...beforeAfter(proofs[`PO-${x.purchaseOrder}`], done.filter((e) => e.purchaseOrder === x.purchaseOrder), "PO status"),
+          ...invoiceIds.flatMap((i) => beforeAfter(proofs[`INV-${i}`], done.filter((e) => e.supplierInvoice === i), `Invoice ${i}`)),
         ],
         jobs: [jobs[`PO-${x.purchaseOrder}`], ...invoiceIds.map((i) => jobs[`INV-${i}`])].filter(Boolean),
       };
@@ -155,7 +168,8 @@ const base = location.pathname, $ = (id) => document.getElementById(id);
 const LABEL = {
  matched:["Matched","ok"], partial_delivery_ok:["Partial delivery, OK","ok"], open_order:["Nothing received yet","neutral"],
  price_difference:["Price difference","bad"], invoiced_more_than_received:["Billed, not delivered","bad"], invoiced_nothing_received:["Billed, nothing received","bad"],
- received_not_invoiced:["Invoice missing","warn"], partially_invoiced:["Invoice missing (part)","warn"] };
+ received_not_invoiced:["Invoice missing","warn"], matched_still_blocked:["Matched, invoice blocked","warn"], partially_invoiced:["Invoice missing (part)","warn"] };
+const WHEN = { before: "Before", after: "After", now: "Now" };
 const money = (n, c) => (n || 0).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + " " + (c || "");
 const time = (iso) => iso ? new Date(iso).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" }) : "";
 const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;" }[c]));
@@ -177,14 +191,14 @@ function card(x) {
   let change = "";
   if (changed) {
     const [bl, bt] = LABEL[b.status] || [b.status, "neutral"];
-    change = '<div class="change"><span class="pill ' + bt + ' strike">' + bl + '</span><span>→</span><span class="pill ' + tone + '">' + label + '</span>'
+    change = '<div class="change">' + (b.status !== x.status ? '<span class="pill ' + bt + ' strike">' + bl + '</span><span>→</span><span class="pill ' + tone + '">' + label + '</span>' : '<span class="sub">Since the starting point:</span>')
       + (b.received !== x.received ? '<span class="sub">received ' + b.received + ' → ' + x.received + '</span>' : '')
       + (b.blocked.length !== blocked.length ? '<span class="sub">blocked invoices ' + b.blocked.length + ' → ' + blocked.length + '</span>' : '') + '</div>';
   }
   const acts = x.actions.map((a) => '<div>' + time(a.time) + ' · ' + esc(a.action) + (a.document ? ' ' + esc(a.document) : '') + ' · <b>' + esc(a.status) + '</b>' + (a.by ? ' · approved by ' + esc(a.by) : '') + '</div>').join("");
   const jobs = x.jobs.filter((j) => j.state !== "done").map((j) => '<span class="sub">' + (j.state === "running" ? "Taking Fiori picture…" : "Fiori picture failed: " + esc(j.error)) + '</span>').join(" ");
   const taken = (f) => { const m = f.match(/(\\d{4})(\\d{2})(\\d{2})T(\\d{2})(\\d{2})(\\d{2})\\.png$/); return m ? time(m[1] + "-" + m[2] + "-" + m[3] + "T" + m[4] + ":" + m[5] + ":" + m[6] + "Z") : ""; };
-  const proofs = x.proofs.map((p) => '<figure><img src="' + base + '/proof/' + p.file + '" data-zoom loading="lazy"><figcaption>Fiori · ' + esc(p.kind) + ' · ' + taken(p.file) + '</figcaption></figure>').join("");
+  const proofs = x.proofs.map((p) => '<figure><img src="' + base + '/proof/' + p.file + '" data-zoom loading="lazy"><figcaption><b>' + WHEN[p.when] + '</b> · Fiori · ' + esc(p.kind) + ' · ' + taken(p.file) + '</figcaption></figure>').join("");
   const capInv = x.invoices.map((v) => '<button data-cap="invoice/' + v.invoice + '/' + v.fiscalYear + '">Fiori picture: invoice ' + v.invoice + '</button>').join(" ");
   return '<article class="card' + (changed ? ' changed' : '') + '">'
     + '<div class="top"><div><div class="po">Case ' + caseNo(x.tag) + ' · PO ' + x.purchaseOrder + '</div><div class="mat">' + esc(x.description || x.material) + ' · supplier ' + esc(x.supplier) + ' · ' + x.poPrice + ' ' + x.currency + '/' + x.unit + '</div></div>'

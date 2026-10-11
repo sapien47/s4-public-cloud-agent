@@ -73,7 +73,7 @@ export async function blockedInvoiceSet() {
 }
 
 // Classify one PO item and explain it.
-function analyseItem(h, i, receipts, invoices, blocked) {
+export function analyseItem(h, i, receipts, invoices, blocked) {
   const cur = h.DocumentCurrency;
   const unit = i.PurchaseOrderQuantityUnit;
   const ordered = num(i.OrderQuantity);
@@ -131,6 +131,14 @@ function analyseItem(h, i, receipts, invoices, blocked) {
     status = "matched";
     explanation = `Ordered ${ordered} ${unit}, received ${received}, invoiced ${invoicedQty} at the PO price: everything matches.`;
     actions = ["Nothing to do."];
+  }
+  // The quantities and prices match (e.g. after the missing goods receipt was posted), but SAP keeps the
+  // payment block until someone releases the invoice: the supplier is still not paid.
+  if (anyBlocked && ["matched", "partial_delivery_ok"].includes(status)) {
+    const ids = inv.filter((x) => x.blockedForPayment).map((x) => x.invoice).join(", ");
+    status = "matched_still_blocked";
+    explanation += ` But invoice ${ids} is still blocked for payment, so the supplier will not be paid until it is released.`;
+    actions = ["The reason for the block is solved: release the invoice for payment (s4_release_blocked_invoice, needs human approval)."];
   }
 
   return {

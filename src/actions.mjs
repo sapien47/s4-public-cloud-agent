@@ -57,6 +57,7 @@ export async function postGoodsReceipt(mcpServer, { purchaseOrder, item = 10, qu
   if (problem) { flow.step("check", "failed", problem); return stop("not possible", { problem }); }
   flow.step("check", "done", `${before.material}: ordered ${before.ordered}, received ${before.received}, invoiced ${before.invoicedQuantity} ${before.unit}. Open: ${before.ordered - before.received}.\n${before.explanation}`);
   flow.note(`Read PO ${purchaseOrder}, its goods receipts and invoices`);
+  const beforePicture = capturePurchaseOrder(purchaseOrder); // "before" proof, taken while the human decides
 
   flow.step("approve", "running", "Waiting for your approval.");
   const approval = await flow.approve(
@@ -69,6 +70,7 @@ export async function postGoodsReceipt(mcpServer, { purchaseOrder, item = 10, qu
   flow.step("approve", "done", `Approved by ${approval.answeredBy}${approval.comment ? `: ${approval.comment}` : ""}`);
 
   flow.step("post", "running");
+  await beforePicture; // never picture the "before" after the change (capture never throws)
   let gr;
   try {
     gr = await post(SRV.md, "A_MaterialDocumentHeader", {
@@ -134,6 +136,7 @@ export async function releaseBlockedInvoice(mcpServer, { supplierInvoice, fiscal
   const cur = items[0]?.currency || "";
   flow.step("check", "done", `Blocked for payment (reason ${blocked.get(`${supplierInvoice}|${fiscalYear}`)}).\n${why}`);
   flow.note(`Read invoice ${supplierInvoice}, its PO, goods receipts and the blocked-invoice list`);
+  const beforePicture = captureInvoice(supplierInvoice, fiscalYear); // "before" proof, taken while the human decides
 
   flow.step("approve", "running", "Waiting for your approval.");
   const approval = await flow.approve(
@@ -144,6 +147,7 @@ export async function releaseBlockedInvoice(mcpServer, { supplierInvoice, fiscal
   flow.step("approve", "done", `Approved by ${approval.answeredBy}${approval.comment ? `: ${approval.comment}` : ""}`);
 
   flow.step("release", "running");
+  await beforePicture; // never picture the "before" after the change (capture never throws)
   let res;
   try {
     res = await post(SRV.si, `Release?SupplierInvoice='${supplierInvoice}'&FiscalYear='${fiscalYear}'&DiscountDaysHaveToBeShifted=false`);
