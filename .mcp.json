@@ -1,0 +1,9 @@
+{
+  "mcpServers": {
+    "s4-grir-agent": {
+      "type": "stdio",
+      "command": "node",
+      "args": ["src/server.js"]
+    }
+  }
+}

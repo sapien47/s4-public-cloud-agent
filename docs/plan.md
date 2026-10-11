@@ -47,6 +47,9 @@ Read tools: `grir_worklist` (our POs with GR vs invoice quantities/values and th
 Write tools, each behind the approval/workflow page + audit log + verify after write: `post_goods_receipt`, `release_blocked_invoice`.
 No SAP write: `draft_supplier_message`.
 
+**Built 2026-10-11** (`src/`): 7 tools: `s4_grir_worklist`, `s4_explain_purchase_order`, `s4_blocked_invoices`, `s4_draft_supplier_message` (read / draft only), `s4_post_goods_receipt` and `s4_release_blocked_invoice` (live workflow page with Start + Approve, read back from SAP, audit log), `s4_audit_log`. Approval page, workflow page and audit module reused from sap-basis-agent. Read tools tested like a real client (`scripts/mcp-smoke.mjs`, 13 checks); both write tools tested on set 1 with the user approving (GR 5000000420 on PO 4500000277; invoice 5105600203 released), verified in SAP and in the audit log.
+**Case 5 ending (decided):** the agent stops once the goods receipt is posted ("the invoice can now be entered"); it does not enter the invoice itself.
+
 Value over existing demos: business-named tools (not a raw OData proxy), human approval, verify after write, audit, and live-tested on a real Public Cloud tenant.
 
 ## D. Demo readiness
