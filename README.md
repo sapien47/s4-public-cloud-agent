@@ -24,6 +24,14 @@ The demo set has six purchase orders, one per typical situation:
 
 The full demo script, with the questions to ask, is in [docs/demo-cheat-sheet.md](docs/demo-cheat-sheet.md).
 
+## See it
+
+The **GR/IR board** opens in the browser on request ("open the board") and refreshes itself from SAP. One card per purchase order: ordered, received and invoiced, the problem in plain words, the money at stake, and Fiori screenshots taken by the agent as proof.
+
+![GR/IR board: six purchase orders, three needing action, with the amounts at stake and the reason for each](docs/img/grir-board.png)
+
+<sub>The board at the start of the demo, live from the tenant, with demo data only. After each approved change, the card shows what changed and the before/after Fiori pictures.</sub>
+
 ## Why this is more than "OData behind MCP"
 
 SAP's own reference architecture warns that connecting MCP straight to raw transactional APIs leads to poor accuracy, high token use and a real risk of wrong business postings. This POC follows that advice:
