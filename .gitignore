@@ -8,3 +8,5 @@ __pycache__/
 *.pyc
 # created document numbers and audit logs
 logs/
+# Fiori browser session for proof screenshots (signed-in cookies)
+.fiori-session/

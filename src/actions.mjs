@@ -5,6 +5,9 @@
 import { SRV, get, post, v2Date } from "./s4-client.mjs";
 import { analyse, blockedInvoiceSet } from "./grir.mjs";
 import { audit, newRequestId, openFlow, refusalStatus } from "./governance.mjs";
+import { capturePurchaseOrder, captureInvoice } from "./proof.mjs";
+
+const PROOF_NOTE = "A Fiori proof picture is being taken in the background; it appears on the GR/IR board in about a minute.";
 
 const SYSTEM = () => process.env.S4_SYSTEM_LABEL || "S/4HANA Cloud Public Edition";
 const fmt = (n) => Number(n).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -93,7 +96,8 @@ export async function postGoodsReceipt(mcpServer, { purchaseOrder, item = 10, qu
   await audit({ requestId, action, ...base, status, approval, materialDocument: gr.MaterialDocument, year: gr.MaterialDocumentYear, verified, after: after && { received: after.received, status: after.status } });
   flow.step("close", "done", `Audit log entry ${requestId} written.`);
   flow.end(status, after ? after.explanation : "");
-  return { requestId, action, status, approvedBy: approval.answeredBy, materialDocument: gr.MaterialDocument, year: gr.MaterialDocumentYear,
+  capturePurchaseOrder(purchaseOrder); // not awaited: the picture follows on the board
+  return { requestId, action, status, approvedBy: approval.answeredBy, materialDocument: gr.MaterialDocument, year: gr.MaterialDocumentYear, proof: PROOF_NOTE,
     before: { received: before.received, status: before.status }, after: after && { received: after.received, status: after.status, explanation: after.explanation, suggestedActions: after.suggestedActions } };
 }
 
@@ -157,7 +161,8 @@ export async function releaseBlockedInvoice(mcpServer, { supplierInvoice, fiscal
   await audit({ requestId, action, ...base, status, approval, amount, currency: cur, verified: !stillBlocked });
   flow.step("close", "done", `Audit log entry ${requestId} written.`);
   flow.end(status, stillBlocked ? "The invoice still shows as blocked." : `Invoice ${supplierInvoice} released for payment.`);
-  return { requestId, action, status, approvedBy: approval.answeredBy, approvalComment: approval.comment, amount, currency: cur, blockedAfter: stillBlocked };
+  captureInvoice(supplierInvoice, fiscalYear); // not awaited: the picture follows on the board
+  return { requestId, action, status, approvedBy: approval.answeredBy, approvalComment: approval.comment, amount, currency: cur, blockedAfter: stillBlocked, proof: PROOF_NOTE };
 }
 
 // ---------------------------------------------------------------- supplier message (no SAP change)

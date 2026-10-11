@@ -13,6 +13,7 @@ import { fileURLToPath } from "node:url";
 import { grirWorklist, explainPurchaseOrder, blockedInvoices } from "./grir.mjs";
 import { postGoodsReceipt, releaseBlockedInvoice, draftSupplierMessage } from "./actions.mjs";
 import { readAudit } from "./governance.mjs";
+import { openBoard } from "./board.mjs";
 
 // Load the project's .env (connection settings) wherever the server is started from.
 const envFile = fileURLToPath(new URL("../.env", import.meta.url));
@@ -120,6 +121,19 @@ server.registerTool(
     annotations: { destructiveHint: false, idempotentHint: false },
   },
   respond((args) => releaseBlockedInvoice(server.server, args))
+);
+
+server.registerTool(
+  "s4_open_board",
+  {
+    title: "Show the GR/IR board",
+    description:
+      "Opens the GR/IR board in the browser: one card per purchase order with ordered / received / invoiced, the problem and money at stake, " +
+      "what changed since the starting point, the agent's approved actions and Fiori proof pictures. It refreshes from SAP by itself. Read-only.",
+    inputSchema: { tag: tagSchema },
+    annotations: { readOnlyHint: true },
+  },
+  respond(openBoard)
 );
 
 server.registerTool(

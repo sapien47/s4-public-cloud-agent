@@ -48,6 +48,10 @@ Write tools, each behind the approval/workflow page + audit log + verify after w
 No SAP write: `draft_supplier_message`.
 
 **Built 2026-10-11** (`src/`): 7 tools: `s4_grir_worklist`, `s4_explain_purchase_order`, `s4_blocked_invoices`, `s4_draft_supplier_message` (read / draft only), `s4_post_goods_receipt` and `s4_release_blocked_invoice` (live workflow page with Start + Approve, read back from SAP, audit log), `s4_audit_log`. Approval page, workflow page and audit module reused from sap-basis-agent. Read tools tested like a real client (`scripts/mcp-smoke.mjs`, 13 checks); both write tools tested on set 1 with the user approving (GR 5000000420 on PO 4500000277; invoice 5105600203 released), verified in SAP and in the audit log.
+**GR/IR board and Fiori proofs (2026-10-11):** tool `s4_open_board` opens a local page (one card per PO: ordered / received / invoiced, problem, money at stake, before → now since a starting point, the agent's approved actions, Fiori pictures), refreshed from SAP every 5 s. After each approved write, a Fiori picture is taken in the background with playwright-core and the installed Chrome (own profile `.fiori-session/`, git-ignored): PO → "Status Details" popover; invoice → Supplier Invoice display (payment status). SAP system bar and header hidden.
+
+**Demo-day commands:** `npm run fiori-login` (sign in once, a few hours) · `npm run new-case5` (after a rehearsal: retags the used case 5 PO to `USED-GRIR2` and creates a fresh one; does nothing if the current one is unused) · `npm run board-snapshot` (backup picture of the board).
+
 **Case 5 ending (decided):** the agent stops once the goods receipt is posted ("the invoice can now be entered"); it does not enter the invoice itself.
 
 Value over existing demos: business-named tools (not a raw OData proxy), human approval, verify after write, audit, and live-tested on a real Public Cloud tenant.

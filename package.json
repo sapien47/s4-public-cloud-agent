@@ -6,12 +6,24 @@
   "type": "module",
   "scripts": {
     "start": "node src/server.js",
-    "smoke": "node --env-file=.env scripts/smoke-test.mjs"
+    "smoke": "node --env-file=.env scripts/smoke-test.mjs",
+    "fiori-login": "node --env-file=.env scripts/fiori-proof.mjs login",
+    "new-case5": "node --env-file=.env scripts/new-case5.mjs",
+    "board-snapshot": "node --env-file=.env scripts/board-snapshot.mjs"
   },
-  "keywords": ["sap", "s4hana", "public-cloud", "odata", "mcp", "agent", "gr-ir"],
+  "keywords": [
+    "sap",
+    "s4hana",
+    "public-cloud",
+    "odata",
+    "mcp",
+    "agent",
+    "gr-ir"
+  ],
   "license": "MIT",
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.32.1",
+    "playwright-core": "^1.64.0",
     "zod": "^4.6.5"
   }
 }
