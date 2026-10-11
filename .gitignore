@@ -6,3 +6,5 @@ CLAUDE.md
 # Python cache
 __pycache__/
 *.pyc
+# created document numbers and audit logs
+logs/
