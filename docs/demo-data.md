@@ -87,6 +87,31 @@ Both observations match the predictions, which confirms the inference: switching
 
 Every case behaves as predicted. Set DEMO-GRIR-1 (POs 4500000271–277) stays in SAP as history; the agent filters on tag `GRIR2`.
 
+Cases 2, 3 and 5 of this table were used in a rehearsal and replaced: see "Fresh cases" below for the current POs.
+
+## Fresh cases (`npm run fresh-cases`)
+
+Each case story works once per PO: after the agent's approved fix the PO is no longer a problem. `scripts/fresh-demo-cases.mjs` refreshes cases 2–5:
+
+- reads each case's PO from SAP and skips the cases still in their starting state (running it twice creates nothing extra),
+- creates a fresh PO with the same starting problem (goods receipt and supplier invoice as needed, dated in May 2026, unique supplier reference per invoice `GRIR2-C<n>-<DDHHmm>` against the duplicate-invoice check),
+- only then retags the used PO `GRIR2-C<n>` → `USED-GRIR2` (nothing deleted or reversed),
+- reads the fresh PO back, resets the board's starting point and writes the document numbers to `logs/fresh-cases-<time>.json`.
+
+Without `--run` it only shows the plan. `npm run new-case5` (case 5 only) still works.
+
+### 2026-10-11 rehearsal (run with `--run`, read back from SAP)
+
+Used in the rehearsal: case 5 (goods receipt 50 PC posted), case 3 (goods receipt 100 PC posted, invoice 5105600207 released), case 2 (invoice 5105600209 released, price accepted). All four changes approved on the workflow page and in the audit log.
+
+| # | Case | Used PO (now `USED-GRIR2`) | Fresh PO | Goods receipt | Invoice | SAP status |
+|---|---|---|---|---|---|---|
+| 2 | Price +10 % | 4500000281 | **4500000284**: 200 × TG0011 at 30 | 5000000423: 200 | 5105600211: 6,600.00 | **blocked for payment** |
+| 3 | Invoiced more than received | 4500000278 | **4500000285**: 500 × TG11 at 13.50 | 5000000424: 400 | 5105600212: 6,750.00 | **blocked for payment** |
+| 5 | Invoice arrives, nothing received | 4500000279 | **4500000286**: 50 × TG0011 at 30 | none | none (1,500.00 waits outside SAP) | open order |
+
+Cases 1 (4500000280), 4 (4500000282) and 6 (4500000283) were still in their starting state and kept. Re-read after the run: exactly 6 POs tagged `GRIR2`, each in its starting state.
+
 ## How it will be created
 
 1. **Pilot first:** case 1 only (1 PO, 1 GR, 1 invoice), then check it in Fiori and through the API.

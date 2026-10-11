@@ -9,6 +9,7 @@
     "smoke": "node --env-file=.env scripts/smoke-test.mjs",
     "fiori-login": "node --env-file=.env scripts/fiori-proof.mjs login",
     "new-case5": "node --env-file=.env scripts/new-case5.mjs",
+    "fresh-cases": "node --env-file=.env scripts/fresh-demo-cases.mjs",
     "board-snapshot": "node --env-file=.env scripts/board-snapshot.mjs"
   },
   "keywords": [
