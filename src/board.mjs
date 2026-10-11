@@ -167,7 +167,7 @@ button{font:inherit;font-size:12px;padding:4px 10px;border-radius:6px;border:1px
 const base = location.pathname, $ = (id) => document.getElementById(id);
 const LABEL = {
  matched:["Matched","ok"], partial_delivery_ok:["Partial delivery, OK","ok"], open_order:["Nothing received yet","neutral"],
- price_difference:["Price difference","bad"], invoiced_more_than_received:["Billed, not delivered","bad"], invoiced_nothing_received:["Billed, nothing received","bad"],
+ price_difference:["Price difference","bad"], price_difference_accepted:["Price difference accepted","ok"], invoiced_more_than_received:["Billed, not delivered","bad"], invoiced_nothing_received:["Billed, nothing received","bad"],
  received_not_invoiced:["Invoice missing","warn"], matched_still_blocked:["Matched, invoice blocked","warn"], partially_invoiced:["Invoice missing (part)","warn"] };
 const WHEN = { before: "Before", after: "After", now: "Now" };
 const money = (n, c) => (n || 0).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + " " + (c || "");
@@ -183,7 +183,8 @@ function card(x) {
   const max = Math.max(x.ordered, x.received, x.invoicedQuantity, 1);
   const blocked = x.invoices.filter((v) => v.blockedForPayment).map((v) => v.invoice);
   let stake = "";
-  if (x.priceDifference) stake = money(x.priceDifference, x.currency) + " above the agreed price";
+  if (x.status === "price_difference_accepted") stake = money(x.priceDifference, x.currency) + " above the PO price, accepted";
+  else if (x.priceDifference) stake = money(x.priceDifference, x.currency) + " above the agreed price";
   else if (x.quantityInvoicedNotReceived) stake = money(x.quantityInvoicedNotReceived * x.poPrice, x.currency) + " billed, not delivered";
   else if (x.grirBalance > 0) stake = money(x.grirBalance, x.currency) + " received, not invoiced";
   const b = x.before;
@@ -222,7 +223,7 @@ async function load() {
     const k = [["Need action", c.filter((x) => x.needsAction).length + " of " + c.length],
       ["Received, not invoiced", money(sum((x) => Math.max(x.grirBalance, 0)), cur)],
       ["Billed, not delivered", money(sum((x) => x.quantityInvoicedNotReceived * x.poPrice), cur)],
-      ["Price differences", money(sum((x) => x.priceDifference), cur)],
+      ["Price differences (open)", money(sum((x) => x.status === "price_difference" ? x.priceDifference : 0), cur)],
       ["Invoices blocked", String(sum((x) => x.invoices.filter((v) => v.blockedForPayment).length))]];
     $("kpis").innerHTML = k.map(([l, v]) => '<div class="kpi"><span class="sub">' + l + '</span><b>' + v + '</b></div>').join("");
     $("grid").innerHTML = c.sort((a, b) => caseNo(a.tag) - caseNo(b.tag)).map(card).join("");

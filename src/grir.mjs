@@ -3,6 +3,7 @@
 // language and suggest what a buyer / AP accountant would do. Payment blocks come from the
 // blocked-invoice list (A_SupplierInvoiceBlock), not the invoice header (see docs/demo-data.md).
 import { SRV, get, day, daysSince } from "./s4-client.mjs";
+import { readAudit } from "./governance.mjs";
 
 const DEFAULT_TAG = () => process.env.DEMO_TAG || "GRIR2";
 const num = (x) => Number(x || 0);
@@ -73,7 +74,8 @@ export async function blockedInvoiceSet() {
 }
 
 // Classify one PO item and explain it.
-export function analyseItem(h, i, receipts, invoices, blocked) {
+// released: invoices a human approved for release (audit log), so a remaining price difference was accepted.
+export function analyseItem(h, i, receipts, invoices, blocked, released = new Set()) {
   const cur = h.DocumentCurrency;
   const unit = i.PurchaseOrderQuantityUnit;
   const ordered = num(i.OrderQuantity);
@@ -97,7 +99,13 @@ export function analyseItem(h, i, receipts, invoices, blocked) {
   const fmt = (n) => n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
   let status, explanation, actions;
-  if (priceDiff) {
+  const acceptedBy = inv.filter((x) => !x.blockedForPayment && released.has(x.invoice)).map((x) => x.invoice);
+  if (priceDiff && !anyBlocked && acceptedBy.length) {
+    status = "price_difference_accepted";
+    explanation = `The supplier invoiced ${invoicedQty} ${unit} at ${fmt(invoicePrice)} ${cur} instead of ${fmt(price)} ${cur} on the PO (${fmt(priceDiff)} ${cur}, ${((invoicePrice / price - 1) * 100).toFixed(1)} %). ` +
+      `The difference was accepted: invoice ${acceptedBy.join(", ")} was released for payment after human approval (see the audit log).`;
+    actions = [`Nothing to do for GR/IR. Optional for the buyer: update the PO price to ${fmt(invoicePrice)} ${cur} so future deliveries are priced right.`];
+  } else if (priceDiff) {
     status = "price_difference";
     explanation = `The supplier invoiced ${invoicedQty} ${unit} at ${fmt(invoicePrice)} ${cur} instead of the agreed ${fmt(price)} ${cur} on the PO: ${fmt(priceDiff)} ${cur} more than agreed (${((invoicePrice / price - 1) * 100).toFixed(1)} %).` +
       (anyBlocked ? " SAP blocked the invoice for payment." : " The invoice is NOT blocked for payment.");
@@ -150,17 +158,23 @@ export function analyseItem(h, i, receipts, invoices, blocked) {
     goodsReceiptBasedInvoiceVerification: Boolean(i.InvoiceIsGoodsReceiptBased),
     receipts: receipts.map((r) => ({ document: r.MaterialDocument, year: r.MaterialDocumentYear, postingDate: r.postingDate, movementType: r.GoodsMovementType, quantity: num(r.QuantityInEntryUnit) })),
     invoices: inv, lastReceipt, lastInvoice,
-    status, needsAction: !["matched", "partial_delivery_ok", "open_order"].includes(status), explanation, suggestedActions: actions,
+    status, needsAction: !["matched", "partial_delivery_ok", "open_order", "price_difference_accepted"].includes(status), explanation, suggestedActions: actions,
   };
+}
+
+// Invoices released for payment by an approved agent request (audit log).
+async function approvedReleases() {
+  const { entries = [] } = await readAudit({ limit: 100000 });
+  return new Set(entries.filter((e) => e.action === "release blocked invoice" && String(e.status).startsWith("done")).map((e) => e.supplierInvoice));
 }
 
 export async function analyse({ purchaseOrder, tag } = {}) {
   const heads = await loadPurchaseOrders({ purchaseOrder, tag });
   const pos = heads.map((h) => h.PurchaseOrder);
-  const [receipts, invoices, blocked] = await Promise.all([loadReceipts(pos), loadInvoices(pos), blockedInvoiceSet()]);
+  const [receipts, invoices, blocked, released] = await Promise.all([loadReceipts(pos), loadInvoices(pos), blockedInvoiceSet(), approvedReleases()]);
   return heads.flatMap((h) => h.items.map((i) => {
     const k = itemKey(h.PurchaseOrder, i.PurchaseOrderItem);
-    return analyseItem(h, i, receipts.get(k) || [], invoices.get(k) || [], blocked);
+    return analyseItem(h, i, receipts.get(k) || [], invoices.get(k) || [], blocked, released);
   }));
 }
 
@@ -177,7 +191,8 @@ export async function grirWorklist({ tag, includeOk = false } = {}) {
       currency: items[0]?.currency || null,
       receivedNotInvoiced: sum(items, (x) => Math.max(x.grirBalance, 0)),
       invoicedNotReceived: sum(items, (x) => x.quantityInvoicedNotReceived * x.poPrice),
-      priceDifferences: sum(items, (x) => x.priceDifference),
+      priceDifferences: sum(items.filter((x) => x.status !== "price_difference_accepted"), (x) => x.priceDifference),
+      priceDifferencesAccepted: sum(items.filter((x) => x.status === "price_difference_accepted"), (x) => x.priceDifference),
       invoicesBlockedForPayment: items.flatMap((x) => x.invoices).filter((v) => v.blockedForPayment).length,
     },
     items: (includeOk ? items : issues).map(({ receipts, invoices, suggestedActions, ...rest }) => ({
