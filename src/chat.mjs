@@ -1,17 +1,13 @@
-// Web chat for the GR/IR board: a chat panel inside the board page. The user types a question, the
-// server asks Claude (Anthropic API) with the same tools the MCP server offers, and the answer
-// streams back into the panel. When Claude calls a tool that changes SAP, the workflow page
-// (start, approval, steps, audit) opens inside the board as a panel, so there is no second window.
+// Web chat for the GR/IR board: a chat panel inside the board page. The user types a question, a
+// backend answers it with the GR/IR tools (src/claude-cli.mjs: headless Claude Code on the user's
+// own login, no API key), and the answer streams back into the panel. When Claude calls a tool
+// that changes SAP, the workflow page (start, approval, steps, audit) opens inside the board as a
+// panel, so there is no second window.
 //
 // Safety is unchanged: the two write tools only run after a human clicked Start and Approve in the
 // workflow panel. The page's secret links never go to Claude: tool results do not contain them.
-import { z } from "zod";
-import Anthropic from "@anthropic-ai/sdk";
 
-const MAX_STEPS = 12; // model calls per question
-const MAX_RESULT_CHARS = 40000;
-
-const SYSTEM = `You are the GR/IR assistant inside a web page, working for an accounts-payable accountant or a buyer on SAP S/4HANA Cloud Public Edition. The GR/IR board (one card per purchase order) is visible next to this chat, so do not repeat what is on it: answer the question, and name PO numbers, invoice numbers and amounts.
+export const SYSTEM = `You are the GR/IR assistant inside a web page, working for an accounts-payable accountant or a buyer on SAP S/4HANA Cloud Public Edition. The GR/IR board (one card per purchase order) is visible next to this chat, so do not repeat what is on it: answer the question, and name PO numbers, invoice numbers and amounts.
 
 How to work:
 - Read live data with the tools before answering. Never invent numbers, documents or dates. If a tool fails, say so.
@@ -20,87 +16,42 @@ How to work:
 - Changes in SAP (posting a goods receipt, releasing a blocked invoice): call the tool only when the user clearly asked for it and a reason is known (ask for it if missing). The tool opens a workflow panel in this page where the human clicks Start and then Approve. You cannot approve for them: tell them to use the panel, and wait for the tool result. Never say a change is done before the tool result says so; report the verified result and the document numbers.
 - A supplier invoice needs its fiscal year; take it from the invoice date (read the purchase order) if the user does not say.
 - E-mails to suppliers: show the draft in the chat. You cannot send e-mail.
-- Do not mention internal tool names.`;
+- You have no other abilities than these tools. Do not mention tool names.`;
 
-const friendly = (err) => {
-  if (err instanceof Anthropic.AuthenticationError || /resolve authentication|api key/i.test(err.message || "")) return "No valid Anthropic API key. Put ANTHROPIC_API_KEY in the .env file and restart the web page.";
-  if (err instanceof Anthropic.RateLimitError) return "Anthropic is rate-limiting this key right now. Try again in a minute.";
-  if (err instanceof Anthropic.APIError) return `Claude API error ${err.status}: ${err.message}`;
-  return err.message;
-};
-
-// `tools`: the registry from tools.mjs. `ctx`: passed to each tool. `client`: injectable for tests.
-export function createChat({ tools, ctx = {}, client, model, effort = "medium" }) {
-  const list = tools.filter((t) => t.web !== false);
-  const byName = Object.fromEntries(list.map((t) => [t.name, t]));
-  const apiTools = list.map((t) => {
-    const schema = z.toJSONSchema(z.object(t.shape));
-    delete schema.$schema;
-    return { name: t.name, description: t.description, input_schema: schema };
-  });
-  const anthropic = client || new Anthropic();
-  const modelId = model || process.env.CHAT_MODEL || "claude-opus-5-5";
-
+// `tools`: the registry from tools.mjs (for the friendly status labels). `backend`: { run(text, emit), reset() }.
+export function createChat({ tools, backend }) {
+  const label = Object.fromEntries(tools.map((t) => [t.name, { text: t.working || t.title, writes: !!t.writes }]));
   const state = { messages: [], busy: false, workflow: null };
-  let history = []; // what Claude sees (append-only within a conversation)
   let seq = 0;
 
   const showWorkflow = (url) => { state.workflow = { url, openedAt: Date.now(), id: ++seq }; };
-
-  async function runTool(block, part) {
-    const tool = byName[block.name];
-    if (!tool) return { text: `Unknown tool ${block.name}`, error: true };
-    part.label = tool.working || tool.title;
-    try {
-      let out = JSON.stringify(await tool.run(block.input, ctx), null, 2);
-      if (out.length > MAX_RESULT_CHARS) out = out.slice(0, MAX_RESULT_CHARS) + "\n[truncated]";
-      part.status = "done";
-      return { text: out, error: false };
-    } catch (err) {
-      part.status = "error";
-      part.error = err.message;
-      return { text: err.message, error: true };
-    }
-  }
 
   async function turn(text) {
     state.messages.push({ id: ++seq, role: "user", parts: [{ type: "text", text }] });
     const reply = { id: ++seq, role: "assistant", parts: [] };
     state.messages.push(reply);
-    history.push({ role: "user", content: text });
-    const mark = history.length;
+    let live = null; // text part being streamed
+    const emit = (ev) => {
+      if (ev.kind === "text-start") { live = { type: "text", text: "" }; reply.parts.push(live); }
+      else if (ev.kind === "text") {
+        if (!live) { live = { type: "text", text: "" }; reply.parts.push(live); }
+        live.text += ev.text;
+      } else if (ev.kind === "tool-start") {
+        live = null;
+        const l = label[ev.name];
+        reply.parts.push({ type: "tool", id: ev.id, name: ev.name, label: l?.text || ev.name, status: "running", writes: !!l?.writes });
+      } else if (ev.kind === "tool-end") {
+        const p = reply.parts.find((x) => x.type === "tool" && x.id === ev.id);
+        if (p) p.status = ev.error ? "error" : "done";
+      } else if (ev.kind === "note") reply.parts.push({ type: "note", error: !!ev.error, text: ev.text });
+    };
     try {
-      for (let step = 0; step < MAX_STEPS; step++) {
-        let live = null; // text part being streamed in this model call
-        const stream = anthropic.messages.stream({
-          model: modelId, max_tokens: 16000, system: SYSTEM, tools: apiTools, messages: history,
-          output_config: { effort },
-        });
-        stream.on("text", (delta) => {
-          if (!live) { live = { type: "text", text: "" }; reply.parts.push(live); }
-          live.text += delta;
-        });
-        const final = await stream.finalMessage();
-        history.push({ role: "assistant", content: final.content });
-        if (final.stop_reason === "refusal") { reply.parts.push({ type: "note", text: "Claude declined this request." }); break; }
-        if (final.stop_reason === "max_tokens") { reply.parts.push({ type: "note", text: "The answer was cut off (length limit)." }); break; }
-        if (final.stop_reason !== "tool_use") break;
-
-        const results = [];
-        for (const block of final.content.filter((b) => b.type === "tool_use")) {
-          const part = { type: "tool", name: block.name, label: byName[block.name]?.working || block.name, status: "running", writes: !!byName[block.name]?.writes };
-          reply.parts.push(part);
-          const r = await runTool(block, part);
-          results.push({ type: "tool_result", tool_use_id: block.id, content: r.text, ...(r.error ? { is_error: true } : {}) });
-        }
-        history.push({ role: "user", content: results });
-        if (step === MAX_STEPS - 1) reply.parts.push({ type: "note", text: "Stopped: too many steps for one question." });
-      }
+      await backend.run(text, emit);
     } catch (err) {
-      reply.parts.push({ type: "note", error: true, text: friendly(err) });
-      history = history.slice(0, mark - 1); // drop the unanswered turn so the next question starts clean
+      emit({ kind: "note", error: true, text: err.message });
     }
     for (const p of reply.parts) if (p.type === "tool" && p.status === "running") p.status = "error";
+    reply.parts = reply.parts.filter((p) => p.type !== "text" || p.text.trim());
     state.busy = false;
   }
 
@@ -116,7 +67,7 @@ export function createChat({ tools, ctx = {}, client, model, effort = "medium" }
   async function handle(req, res, base, send) {
     if (!req.url.startsWith(`${base}/chat`)) return false;
     const route = req.url.slice(base.length);
-    if (req.method === "GET" && route === "/chat/state") { send(res, 200, { model: modelId, ...state }); return true; }
+    if (req.method === "GET" && route === "/chat/state") { send(res, 200, { model: backend.label || "", ...state }); return true; }
     if (req.method !== "POST") { send(res, 405, { error: "method not allowed" }); return true; }
     const body = await readBody(req);
     if (route === "/chat") {
@@ -130,7 +81,7 @@ export function createChat({ tools, ctx = {}, client, model, effort = "medium" }
     }
     if (route === "/chat/reset") {
       if (state.busy) { send(res, 409, { error: "busy" }); return true; }
-      state.messages = []; state.workflow = null; history = [];
+      state.messages = []; state.workflow = null; backend.reset();
       send(res, 200, { ok: true });
       return true;
     }

@@ -92,7 +92,7 @@ The repo includes `.mcp.json`, so Claude Code picks up the server automatically 
 npm run web
 ```
 
-Opens the GR/IR board with a chat panel on the right. Ask a question there; Claude answers using the same tools as the MCP server. When you ask for a change in SAP, the approval workflow (Start, steps, Approve, audit) opens **inside the same page**; the human still clicks Start and Approve, and Claude cannot. Needs `ANTHROPIC_API_KEY` in `.env` (the chat calls the Anthropic API directly, billed per use). `node scripts/web-fake.mjs` runs the page with a scripted stand-in for Claude (no key needed) and `node scripts/chat-test.mjs` tests the chat engine.
+Opens the GR/IR board with a chat panel on the right. Ask a question there; Claude answers using the same tools as the MCP server. When you ask for a change in SAP, the approval workflow (Start, steps, Approve, audit) opens **inside the same page**; the human still clicks Start and Approve, and Claude cannot. No API key: every question is answered by your own signed-in [Claude Code](https://claude.com/claude-code) running headless (`claude -p`) with its built-in tools switched off, connected only to this project's GR/IR tools; it uses your Claude plan's allowance. `node scripts/web-fake.mjs` runs the page with a scripted stand-in (no Claude needed) and `node scripts/chat-test.mjs` tests the chat engine.
 
 ## Credits and related work
 

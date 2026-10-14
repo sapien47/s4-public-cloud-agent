@@ -112,3 +112,22 @@ export const tools = [
     run: (args) => readAudit(args),
   },
 ];
+
+// Register the tools on an McpServer. `web: true` leaves out the tools that make no sense in the web chat.
+export function registerTools(server, ctx, { web = false } = {}) {
+  const respond = (fn) => async (args) => {
+    try {
+      return { content: [{ type: "text", text: JSON.stringify(await fn(args), null, 2) }] };
+    } catch (err) {
+      return { isError: true, content: [{ type: "text", text: err.message }] };
+    }
+  };
+  for (const t of tools) {
+    if (web && t.web === false) continue;
+    server.registerTool(
+      t.name,
+      { title: t.title, description: t.description, inputSchema: t.shape, annotations: t.annotations },
+      respond((args) => t.run(args, ctx))
+    );
+  }
+}
