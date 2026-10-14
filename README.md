@@ -86,6 +86,14 @@ The repo includes `.mcp.json`, so Claude Code picks up the server automatically 
 
 `.env`, the audit log, created document numbers and the Fiori browser session are git-ignored.
 
+### Web page with chat (one page, no window switching)
+
+```bash
+npm run web
+```
+
+Opens the GR/IR board with a chat panel on the right. Ask a question there; Claude answers using the same tools as the MCP server. When you ask for a change in SAP, the approval workflow (Start, steps, Approve, audit) opens **inside the same page**; the human still clicks Start and Approve, and Claude cannot. Needs `ANTHROPIC_API_KEY` in `.env` (the chat calls the Anthropic API directly, billed per use). `node scripts/web-fake.mjs` runs the page with a scripted stand-in for Claude (no key needed) and `node scripts/chat-test.mjs` tests the chat engine.
+
 ## Credits and related work
 
 - SAP's reference architecture for third-party MCP access, for the "business tools, not raw APIs" principle.

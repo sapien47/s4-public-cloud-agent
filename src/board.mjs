@@ -16,6 +16,7 @@ const TAG = () => process.env.DEMO_TAG || "GRIR2";
 const baselineFile = (tag) => path.join(projectRoot, "logs", `board-baseline-${tag}.json`);
 
 let board = null; // { url, tag }
+let boardChat = null;
 let cache = { at: 0, items: null, error: null };
 
 async function items(tag) {
@@ -80,8 +81,10 @@ async function state(tag) {
 // For tests and screenshot scripts only (the AI never gets the secret link).
 export const boardUrl = () => board?.url || null;
 
-export async function openBoard({ tag } = {}) {
+// `chat` (web mode only, see src/web.mjs): { handle, css, html, js } adds a chat panel to the page.
+export async function openBoard({ tag } = {}, { chat } = {}) {
   const t = tag || TAG();
+  if (!board && chat) boardChat = chat;
   if (board && board.tag === t) {
     openBrowser(board.url);
     return { opened: true, reused: true, tag: t, note: "Board opened in the browser (local page, refreshes from SAP every few seconds)." };
@@ -92,7 +95,8 @@ export async function openBoard({ tag } = {}) {
   const server = http.createServer(async (req, res) => {
     const base = `/${token}`;
     try {
-      if (req.method === "GET" && req.url === base) return send(res, 200, PAGE, "text/html");
+      if (req.method === "GET" && req.url === base) return send(res, 200, boardChat ? withChat(PAGE, boardChat) : PAGE, "text/html");
+      if (boardChat && (await boardChat.handle(req, res, base, send))) return;
       if (req.method === "GET" && req.url === `${base}/state`) return send(res, 200, await state(t));
       const pm = req.url.match(new RegExp(`^${base}/proof/((?:PO|INV)-\\d+-\\d{8}T\\d{6}\\.png)$`));
       if (req.method === "GET" && pm) {
@@ -121,6 +125,13 @@ export async function openBoard({ tag } = {}) {
   else openBrowser(board.url);
   return { opened: true, tag: t, note: "Board opened in the browser (local page, refreshes from SAP every few seconds). Fiori proof pictures are taken automatically after approved actions." };
 }
+
+// The board page with the chat panel and the inline workflow panel added.
+const withChat = (page, { css, html, js }) => page
+  .replace("</style>", () => css + "</style>")
+  .replace("<body>", '<body class="withchat">')
+  .replace('</main><div id="zoom">', () => "</main>" + html + '<div id="zoom">')
+  .replace("</script></body></html>", () => "</script><script>" + js + "</script></body></html>");
 
 const PAGE = `<!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">

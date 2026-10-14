@@ -6,6 +6,11 @@ import http from "node:http";
 import { randomBytes } from "node:crypto";
 import { openBrowser } from "./approval-window.mjs";
 
+// How the page is shown to the human. Default: a new browser window. The web chat (src/web.mjs)
+// replaces this to show the page inside the GR/IR board instead.
+let opener = openBrowser;
+export const setWorkflowOpener = (fn) => { opener = fn || openBrowser; };
+
 // Create the workflow and its page. `steps`: [{ id, label }]. `facts`: [[label, value]].
 // Returns { ask, step, note, setSecret, end, url } (see below). Throws if the page cannot start.
 export async function openWorkflow({ title, requestId, operator, facts = [], steps, timeoutSeconds = 300, keepOpenSeconds = 900 }) {
@@ -89,7 +94,8 @@ export async function openWorkflow({ title, requestId, operator, facts = [], ste
   });
   const url = `http://127.0.0.1:${server.address().port}/${token}`;
   // Tests play the human themselves and read the link from stderr instead of opening a browser.
-  if (process.env.APPROVAL_NO_BROWSER === "1") console.error(`[workflow] ${url}`);
+  if (opener !== openBrowser) opener(url); // shown inside another page (web chat)
+  else if (process.env.APPROVAL_NO_BROWSER === "1") console.error(`[workflow] ${url}`);
   else openBrowser(url);
 
   return {
