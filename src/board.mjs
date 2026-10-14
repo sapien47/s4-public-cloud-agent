@@ -129,7 +129,7 @@ export async function openBoard({ tag } = {}, { chat } = {}) {
 // The board page with the chat panel and the inline workflow panel added.
 const withChat = (page, { css, html, js }) => page
   .replace("</style>", () => css + "</style>")
-  .replace("<body>", '<body class="withchat">')
+  .replace("<body>", '<body class="withchat solo">')
   .replace('</main><div id="zoom">', () => "</main>" + html + '<div id="zoom">')
   .replace("</script></body></html>", () => "</script><script>" + js + "</script></body></html>");
 

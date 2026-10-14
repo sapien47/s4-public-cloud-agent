@@ -110,7 +110,6 @@ body.withchat main{margin-right:392px;max-width:none}
 .tool.done::before{content:"\\2713";color:var(--ok)}.tool.error::before{content:"\\00d7";color:var(--bad)}
 @keyframes spin{to{transform:rotate(360deg)}}
 .note{font-size:12.5px;color:var(--warn)}.note.error{color:var(--bad)}
-#chips{display:flex;flex-wrap:wrap;gap:6px;padding:0 14px 8px}#chips button{font-size:12.5px;padding:5px 10px;border-radius:99px}
 #chatform{border-top:1px solid var(--line);padding:10px 14px;display:flex;gap:8px;align-items:flex-end}
 #chatform textarea{flex:1;resize:none;min-height:40px;max-height:120px;border:1px solid var(--line);border-radius:8px;padding:8px;background:var(--card);color:var(--text);font:inherit;font-size:14px}
 #chatform button{padding:9px 14px;font-size:14px;background:var(--rec);color:#fff;border:0;border-radius:8px}
@@ -119,6 +118,13 @@ body.withchat main{margin-right:392px;max-width:none}
 #wf{position:fixed;top:0;left:0;bottom:0;right:380px;z-index:30;background:var(--bg);display:none;flex-direction:column;border-right:1px solid var(--line)}
 #wf .bar{display:flex;align-items:center;gap:10px;padding:8px 14px;background:var(--card);border-bottom:1px solid var(--line)}
 #wf .bar b{flex:1}#wf iframe{flex:1;border:0;width:100%}
+body.solo main{display:none}
+body.solo #chat{left:0;width:auto;border-left:0;align-items:center;background:var(--bg)}
+body.solo #chat>*{width:100%;max-width:760px}
+body.solo #chat header{border-bottom:0}body.solo #chat h2{visibility:hidden}
+body.solo #msgs:empty{justify-content:center;align-items:center}
+body.solo #msgs:empty::before{content:"Ask about the GR/IR situation";color:var(--muted);font-size:22px}
+body.solo #chatform{border-top:0;padding-bottom:28px}
 @media (max-width:900px){body.withchat main{margin-right:0}#chat{position:static;width:auto;height:480px;border-left:0;border-top:1px solid var(--line)}#wf{right:0}}
 `;
 
@@ -127,8 +133,7 @@ export const CHAT_HTML = `
   <header><h2>Ask about GR/IR</h2><span class="sub" id="chatmeta"></span><button id="wfopen" style="display:none">Workflow</button><button id="chatreset" title="Start a new conversation">New</button></header>
   <div id="chatbanner"></div>
   <div id="msgs"></div>
-  <div id="chips"></div>
-  <form id="chatform"><textarea id="chatinput" rows="1" placeholder="Ask a question, e.g. what's open on GR/IR?"></textarea><button id="chatsend" type="submit">Send</button></form>
+  <form id="chatform"><textarea id="chatinput" rows="1" placeholder="Ask a question"></textarea><button id="chatsend" type="submit">Send</button></form>
 </aside>
 <div id="wf"><div class="bar"><b id="wftitle">Workflow</b><button id="wfhide">Hide</button></div><iframe id="wfframe" title="Workflow"></iframe></div>
 `;
@@ -138,7 +143,6 @@ export const CHAT_HTML = `
 export const CHAT_JS = String.raw`
 (function () {
   const $c = (id) => document.getElementById(id);
-  const CHIPS = ["What's open on GR/IR?", "Explain the price difference", "Draft an e-mail to the supplier", "What did the agent change so far?"];
   let last = "", wfId = 0, wfHidden = false, wfShown = null, pinned = true;
   const inline = (s) => esc(s).replace(/\*\*(.+?)\*\*/g, "<b>$1</b>").replace(/\x60(.+?)\x60/g, "<code>$1</code>");
   function md(text) {
@@ -169,7 +173,8 @@ export const CHAT_JS = String.raw`
       return d;
     }));
     if (atEnd || pinned) box.scrollTop = box.scrollHeight;
-    $c("chips").style.display = s.messages.length ? "none" : "flex";
+    // Blank chat first; the board slides in once Claude has read SAP (or a workflow opens). "New" goes back.
+    document.body.classList.toggle("solo", !s.workflow && !s.messages.some((m) => m.parts.some((p) => p.type === "tool" && p.status === "done")));
     $c("chatsend").disabled = s.busy; $c("chatreset").disabled = s.busy;
     $c("chatmeta").textContent = s.busy ? "answering…" : s.model;
     const wf = s.workflow;
@@ -195,7 +200,6 @@ export const CHAT_JS = String.raw`
     if (!r.ok) $c("chatbanner").textContent = (await r.json()).error;
     last = ""; poll();
   }
-  $c("chips").replaceChildren(...CHIPS.map((t) => { const b = document.createElement("button"); b.type = "button"; b.textContent = t; b.onclick = () => send(t); return b; }));
   $c("chatform").onsubmit = (e) => { e.preventDefault(); send($c("chatinput").value); };
   $c("chatinput").onkeydown = (e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send($c("chatinput").value); } };
   $c("msgs").onscroll = () => { const b = $c("msgs"); pinned = b.scrollHeight - b.scrollTop - b.clientHeight < 60; };
