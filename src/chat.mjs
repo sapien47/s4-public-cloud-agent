@@ -95,27 +95,29 @@ export function createChat({ tools, backend }) {
 
 // ------------------------------------------------------------------ page parts (injected into the board)
 export const CHAT_CSS = `
-body.withchat main{margin-right:392px;max-width:none}
-#chat{position:fixed;top:0;right:0;bottom:0;width:380px;background:var(--card);border-left:1px solid var(--line);display:flex;flex-direction:column;z-index:20}
+body.withchat{--chatw:min(560px,42vw)}
+body.withchat main{margin-right:calc(var(--chatw) + 12px);max-width:none}
+body.withchat .grid{grid-template-columns:1fr}body.withchat .card{max-width:900px}
+#chat{position:fixed;top:0;right:0;bottom:0;width:var(--chatw);background:var(--card);border-left:1px solid var(--line);display:flex;flex-direction:column;z-index:20}
 #chat header{padding:12px 14px;border-bottom:1px solid var(--line);margin:0;display:flex;align-items:center;gap:8px}
-#chat h2{font-size:16px;margin:0;font-weight:600}#chat header .sub{flex:1;font-size:12px}
-#msgs{flex:1;overflow-y:auto;padding:12px 14px;display:flex;flex-direction:column;gap:10px}
-.m{max-width:94%;padding:8px 12px;border-radius:12px;font-size:14px;line-height:1.5;overflow-wrap:anywhere}
+#chat h2{font-size:18px;margin:0;font-weight:600}#chat header .sub{flex:1;font-size:12px}
+#msgs{flex:1;overflow-y:auto;padding:16px 18px;display:flex;flex-direction:column;gap:12px}
+.m{max-width:100%;padding:10px 14px;border-radius:12px;font-size:15.5px;line-height:1.55;overflow-wrap:break-word}.m.user{max-width:85%}
 .m.user{align-self:flex-end;background:var(--rec);color:#fff}.m.assistant{align-self:flex-start;background:var(--soft)}
 .m p{margin:0 0 6px}.m p:last-child{margin:0}.m ul{margin:0 0 6px;padding-left:18px}
-.m table{border-collapse:collapse;font-size:12.5px;margin:4px 0 8px}.m th,.m td{border:1px solid var(--line);padding:3px 7px;text-align:left}
+.m table{border-collapse:collapse;font-size:14px;margin:6px 0 10px;display:block;overflow-x:auto;max-width:100%}.m th,.m td{border:1px solid var(--line);padding:5px 9px;text-align:left;vertical-align:top}.m td:first-child,.m th:first-child{white-space:nowrap}
 .m pre{white-space:pre-wrap;background:var(--card);border:1px solid var(--line);padding:8px;border-radius:8px;font:12.5px/1.5 system-ui,sans-serif;margin:4px 0}
-.tool{font-size:12px;color:var(--muted);display:flex;gap:6px;align-items:center;margin:2px 0}
+.tool{font-size:13px;color:var(--muted);display:flex;gap:6px;align-items:center;margin:2px 0}
 .tool.running::before{content:"";width:9px;height:9px;border-radius:50%;border:2px solid var(--rec);border-top-color:transparent;animation:spin .8s linear infinite}
 .tool.done::before{content:"\\2713";color:var(--ok)}.tool.error::before{content:"\\00d7";color:var(--bad)}
 @keyframes spin{to{transform:rotate(360deg)}}
-.note{font-size:12.5px;color:var(--warn)}.note.error{color:var(--bad)}
+.note{font-size:14px;color:var(--warn)}.note.error{color:var(--bad)}
 #chatform{border-top:1px solid var(--line);padding:10px 14px;display:flex;gap:8px;align-items:flex-end}
-#chatform textarea{flex:1;resize:none;min-height:40px;max-height:120px;border:1px solid var(--line);border-radius:8px;padding:8px;background:var(--card);color:var(--text);font:inherit;font-size:14px}
+#chatform textarea{flex:1;resize:none;min-height:40px;max-height:120px;border:1px solid var(--line);border-radius:8px;padding:8px;background:var(--card);color:var(--text);font:inherit;font-size:15.5px}
 #chatform button{padding:9px 14px;font-size:14px;background:var(--rec);color:#fff;border:0;border-radius:8px}
 #chatform button:disabled{opacity:.5}
 #chatbanner{display:none;padding:8px 14px;background:var(--warnbg);color:var(--warn);font-size:13px}
-#wf{position:fixed;top:0;left:0;bottom:0;right:380px;z-index:30;background:var(--bg);display:none;flex-direction:column;border-right:1px solid var(--line)}
+#wf{position:fixed;top:0;left:0;bottom:0;right:var(--chatw);z-index:30;background:var(--bg);display:none;flex-direction:column;border-right:1px solid var(--line)}
 #wf .bar{display:flex;align-items:center;gap:10px;padding:8px 14px;background:var(--card);border-bottom:1px solid var(--line)}
 #wf .bar b{flex:1}#wf iframe{flex:1;border:0;width:100%}
 body.solo main{display:none}
